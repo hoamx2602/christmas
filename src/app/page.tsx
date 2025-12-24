@@ -4,7 +4,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import ConfigPanel from "@/components/ConfigPanel";
+import TypingMessage from "@/components/TypingMessage";
 import { ChristmasConfig, defaultConfig } from "@/types/config";
+
+const STORAGE_KEY = "christmas-tree-config";
 
 // Dynamic import to avoid SSR issues with Three.js
 const ChristmasTree = dynamic(() => import("@/components/ChristmasTree"), {
@@ -16,8 +19,47 @@ const ChristmasTree = dynamic(() => import("@/components/ChristmasTree"), {
   ),
 });
 
+// Load config from localStorage
+const loadConfig = (): ChristmasConfig => {
+  if (typeof window === "undefined") return defaultConfig;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Merge with default to handle new properties
+      return { ...defaultConfig, ...parsed };
+    }
+  } catch (e) {
+    console.error("Failed to load config:", e);
+  }
+  return defaultConfig;
+};
+
+// Save config to localStorage
+const saveConfig = (config: ChristmasConfig) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.error("Failed to save config:", e);
+  }
+};
+
 export default function Home() {
   const [config, setConfig] = useState<ChristmasConfig>(defaultConfig);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load config from localStorage on mount
+  useEffect(() => {
+    setConfig(loadConfig());
+    setIsLoaded(true);
+  }, []);
+
+  // Save config whenever it changes (after initial load)
+  useEffect(() => {
+    if (isLoaded) {
+      saveConfig(config);
+    }
+  }, [config, isLoaded]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -60,6 +102,9 @@ export default function Home() {
     >
       {/* Three.js Canvas */}
       <ChristmasTree config={config} onOrnamentClick={handleOrnamentClick} />
+
+      {/* Typing Message */}
+      <TypingMessage />
 
       {/* Background Music */}
       <audio

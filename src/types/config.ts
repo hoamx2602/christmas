@@ -54,7 +54,7 @@ export const defaultConfig: ChristmasConfig = {
   starSize: 0.5,
   starBrightness: 1.0,
   letterCount: 15,
-  letterSize: 0.15,
+  letterSize: 0.1,
   letterSpinSpeed: 1.0,
   letterBrightness: 1.0,
   letterFlowSpeed: 3.0,

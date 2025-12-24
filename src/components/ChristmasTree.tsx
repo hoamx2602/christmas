@@ -69,9 +69,8 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
 
       const intersects = raycaster.intersectObjects(letterMeshes);
       if (intersects.length > 0) {
-        const clickedLetter = intersects[0].object as THREE.Mesh & { letterIndex: number };
-        const imageIndex = (clickedLetter.letterIndex % 5) + 1;
-        onOrnamentClick(`/ornaments/${imageIndex}.jpg`, clickedLetter.letterIndex);
+        const clickedFrame = intersects[0].object as THREE.Mesh & { letterIndex: number; imageUrl: string };
+        onOrnamentClick(clickedFrame.imageUrl, clickedFrame.letterIndex);
         s.isDragging = false;
         return;
       }
@@ -236,11 +235,11 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
       s.treeParticles.geometry.dispose();
       (s.treeParticles.material as THREE.Material).dispose();
     }
-    // Remove star, glow, and letter meshes
+    // Remove star, glow, letter, and frame glow meshes
     const toRemove: THREE.Object3D[] = [];
     s.treeGroup.children.forEach((child) => {
-      const mesh = child as THREE.Mesh & { isStar?: boolean; isStarGlow?: boolean; isLetter?: boolean };
-      if (mesh.isStar || mesh.isStarGlow || mesh.isLetter) {
+      const mesh = child as THREE.Mesh & { isStar?: boolean; isStarGlow?: boolean; isLetter?: boolean; isFrameGlow?: boolean };
+      if (mesh.isStar || mesh.isStarGlow || mesh.isLetter || mesh.isFrameGlow) {
         toRemove.push(mesh);
         mesh.geometry?.dispose();
         (mesh.material as THREE.Material)?.dispose();
@@ -522,119 +521,21 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
     (glowMesh as THREE.Mesh & { isStarGlow: boolean }).isStarGlow = true;
     s.treeGroup.add(glowMesh);
 
-    // Helper function to create 3D shape geometries
-    const create3DShape = (shapeType: number, size: number): THREE.BufferGeometry => {
-      const shape = new THREE.Shape();
-      const s = 0.4; // Base scale
+    // Load textures for photo frames
+    const textureLoader = new THREE.TextureLoader();
+    const photoTextures: THREE.Texture[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const texture = textureLoader.load(`/ornaments/${i}.jpg`);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      photoTextures.push(texture);
+    }
 
-      switch (shapeType) {
-        case 0: // Square/Gift box
-          shape.moveTo(-s, -s);
-          shape.lineTo(s, -s);
-          shape.lineTo(s, s);
-          shape.lineTo(-s, s);
-          shape.closePath();
-          break;
-
-        case 1: // Heart
-          shape.moveTo(0, -s * 0.7);
-          shape.bezierCurveTo(0, -s * 0.9, -s * 0.6, -s, -s * 0.8, -s * 0.5);
-          shape.bezierCurveTo(-s, 0, -s * 0.6, s * 0.5, 0, s * 0.9);
-          shape.bezierCurveTo(s * 0.6, s * 0.5, s, 0, s * 0.8, -s * 0.5);
-          shape.bezierCurveTo(s * 0.6, -s, 0, -s * 0.9, 0, -s * 0.7);
-          break;
-
-        case 2: // Circle/Ornament ball
-          const segments = 32;
-          for (let i = 0; i <= segments; i++) {
-            const theta = (i / segments) * Math.PI * 2;
-            const px = Math.cos(theta) * s;
-            const py = Math.sin(theta) * s;
-            if (i === 0) shape.moveTo(px, py);
-            else shape.lineTo(px, py);
-          }
-          break;
-
-        case 3: // Star 5 points
-          const points5 = 5;
-          const outerR = s;
-          const innerR = s * 0.4;
-          for (let i = 0; i < points5 * 2; i++) {
-            const radius = i % 2 === 0 ? outerR : innerR;
-            const angle = (i * Math.PI) / points5 - Math.PI / 2;
-            const px = Math.cos(angle) * radius;
-            const py = Math.sin(angle) * radius;
-            if (i === 0) shape.moveTo(px, py);
-            else shape.lineTo(px, py);
-          }
-          shape.closePath();
-          break;
-
-        case 4: // Bell
-          shape.moveTo(-s * 0.15, s * 0.9);
-          shape.lineTo(s * 0.15, s * 0.9);
-          shape.lineTo(s * 0.15, s * 0.7);
-          shape.quadraticCurveTo(s * 0.5, s * 0.6, s * 0.6, s * 0.2);
-          shape.quadraticCurveTo(s * 0.7, -s * 0.3, s * 0.8, -s * 0.6);
-          shape.lineTo(s * 0.85, -s * 0.75);
-          shape.quadraticCurveTo(s * 0.4, -s * 0.9, 0, -s * 0.95);
-          shape.quadraticCurveTo(-s * 0.4, -s * 0.9, -s * 0.85, -s * 0.75);
-          shape.lineTo(-s * 0.8, -s * 0.6);
-          shape.quadraticCurveTo(-s * 0.7, -s * 0.3, -s * 0.6, s * 0.2);
-          shape.quadraticCurveTo(-s * 0.5, s * 0.6, -s * 0.15, s * 0.7);
-          shape.closePath();
-          break;
-
-        case 5: // Snowflake (6 points)
-          const points6 = 6;
-          const outerR6 = s;
-          const innerR6 = s * 0.35;
-          for (let i = 0; i < points6 * 2; i++) {
-            const radius = i % 2 === 0 ? outerR6 : innerR6;
-            const angle = (i * Math.PI) / points6;
-            const px = Math.cos(angle) * radius;
-            const py = Math.sin(angle) * radius;
-            if (i === 0) shape.moveTo(px, py);
-            else shape.lineTo(px, py);
-          }
-          shape.closePath();
-          break;
-
-        case 6: // Diamond
-          shape.moveTo(0, s);
-          shape.lineTo(s * 0.6, 0);
-          shape.lineTo(0, -s);
-          shape.lineTo(-s * 0.6, 0);
-          shape.closePath();
-          break;
-
-        default:
-          shape.absarc(0, 0, s, 0, Math.PI * 2, false);
-      }
-
-      const bevelAmount = config.letterBevel * 0.15; // Scale bevel amount
-      const extrudeSettings = {
-        depth: size * (0.1 + config.letterBevel * 0.05),
-        bevelEnabled: config.letterBevel > 0,
-        bevelThickness: size * bevelAmount,
-        bevelSize: size * bevelAmount,
-        bevelSegments: Math.max(1, Math.floor(config.letterBevel * 10)),
-        curveSegments: 16,
-      };
-
-      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      geometry.scale(size, size, 1);
-      geometry.center();
-      return geometry;
-    };
-
-    // Create glowing 3D ornaments with various shapes
-    const shapeTypes = 7;
+    // Create photo frame ornaments
     const placedPositions: THREE.Vector3[] = [];
-    const minDistance = config.letterSize * scale * 2.5; // Minimum distance between ornaments
+    const minDistance = config.letterSize * scale * 2.8;
 
     for (let i = 0; i < config.letterCount; i++) {
-      // Try to find a position that doesn't overlap with existing ornaments
+      // Find non-overlapping position
       let x = 0, y = 0, z = 0;
       let validPosition = false;
       let attempts = 0;
@@ -642,18 +543,15 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
 
       while (!validPosition && attempts < maxAttempts) {
         attempts++;
-
-        // Generate random position on tree cone shape
         y = (Math.random() * 3.5 - 1.5) * scale;
         const normalizedY = (y / scale + 1.5) / 3.5;
         const maxRadius = ((1 - normalizedY) * 1.5 + 0.1) * scale;
         const angle = Math.random() * Math.PI * 2;
-        const r = Math.random() * maxRadius * 0.8;
+        const r = Math.random() * maxRadius * 0.85;
 
         x = Math.cos(angle) * r;
         z = Math.sin(angle) * r;
 
-        // Check distance from all placed ornaments
         validPosition = true;
         for (const pos of placedPositions) {
           const dist = Math.sqrt(
@@ -668,89 +566,104 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
         }
       }
 
-      // Store the position
       placedPositions.push(new THREE.Vector3(x, y, z));
-      const placementAngle = Math.atan2(z, x); // Calculate angle for rotation
 
-      const ornamentSize = config.letterSize * scale;
-      const shapeType = Math.floor(Math.random() * shapeTypes);
-      const ornamentGeometry = create3DShape(shapeType, ornamentSize);
+      const frameSize = config.letterSize * scale * 1.2;
+      const photoTexture = photoTextures[i % photoTextures.length];
 
-      const basePhase = Math.random() * Math.PI * 2;
-      const letterMaterial = new THREE.ShaderMaterial({
+      // Create photo plane with golden frame shader
+      const frameGeometry = new THREE.PlaneGeometry(frameSize, frameSize);
+      const frameMaterial = new THREE.ShaderMaterial({
         uniforms: {
           time: { value: 0 },
-          basePhase: { value: basePhase },
-          brightness: { value: config.letterBrightness },
+          photoTexture: { value: photoTexture },
           ornamentIndex: { value: i },
           totalOrnaments: { value: config.letterCount },
           flowSpeed: { value: 2.0 },
+          brightness: { value: config.letterBrightness },
         },
         vertexShader: `
-          varying vec3 vNormal;
-          varying vec3 vPosition;
+          varying vec2 vUv;
           void main() {
-            vNormal = normalize(normalMatrix * normal);
-            vPosition = position;
+            vUv = uv;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
         `,
         fragmentShader: `
           uniform float time;
-          uniform float basePhase;
-          uniform float brightness;
+          uniform sampler2D photoTexture;
           uniform float ornamentIndex;
           uniform float totalOrnaments;
           uniform float flowSpeed;
-          varying vec3 vNormal;
-          varying vec3 vPosition;
+          uniform float brightness;
+          varying vec2 vUv;
 
           void main() {
-            // Golden colors
-            vec3 goldColor = vec3(1.0, 0.8, 0.2);
-            vec3 brightGold = vec3(1.0, 0.95, 0.5);
-            vec3 whiteGold = vec3(1.0, 1.0, 0.9);
+            vec2 uv = vUv;
+            vec2 center = uv - 0.5;
+            float distFromCenter = length(center);
 
-            // Base twinkle effect
-            float twinkle = sin(time * 3.0 + basePhase) * 0.25 + 0.75;
-            float twinkle2 = sin(time * 5.0 + basePhase * 2.0) * 0.15 + 0.85;
+            // Golden frame border
+            float borderSize = 0.12;
 
-            // Sequential flash effect - each ornament takes a turn to flash bright
+            // Calculate distance from edges
+            float distFromEdge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+
+            // Sequential flash effect - VERY strong glow
             float cyclePosition = mod(time * flowSpeed, totalOrnaments);
             float distFromFlash = abs(ornamentIndex - cyclePosition);
-            // Handle wrap-around
             distFromFlash = min(distFromFlash, totalOrnaments - distFromFlash);
-            // Create smooth flash pulse
-            float flashIntensity = exp(-distFromFlash * distFromFlash * 0.5) * 1.5;
+            float flashIntensity = exp(-distFromFlash * distFromFlash * 0.15) * 4.0;
+            flashIntensity = clamp(flashIntensity, 0.0, 4.0);
 
-            // Lighting
-            vec3 lightDir = normalize(vec3(0.5, 1.0, 1.0));
-            float diff = max(dot(vNormal, lightDir), 0.0);
+            // Base twinkle
+            float twinkle = sin(time * 3.0 + ornamentIndex) * 0.15 + 0.85;
 
-            // Fresnel/edge glow
-            vec3 viewDir = normalize(cameraPosition - vPosition);
-            float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 2.0);
+            vec3 color;
 
-            // Base color with lighting
-            vec3 color = goldColor * (0.4 + diff * 0.6);
+            // Radial glow from center - like a bright light bulb
+            float radialGlow = exp(-distFromCenter * 3.0) * flashIntensity * 2.5;
 
-            // Add fresnel glow
-            color += brightGold * fresnel * 0.6;
+            if (distFromEdge < borderSize) {
+              // Golden frame - super bright when flashing
+              vec3 goldBase = vec3(1.0, 0.85, 0.3);
+              vec3 goldBright = vec3(1.0, 0.95, 0.6);
+              vec3 whiteHot = vec3(1.0, 1.0, 0.95);
 
-            // Apply base twinkle
-            color *= twinkle * twinkle2;
+              vec3 frameColor = goldBase * twinkle;
 
-            // Add specular highlight
-            vec3 halfDir = normalize(lightDir + viewDir);
-            float spec = pow(max(dot(vNormal, halfDir), 0.0), 32.0);
-            color += vec3(1.0) * spec * 0.5 * twinkle;
+              // When flashing - go white hot
+              frameColor = mix(frameColor, whiteHot, flashIntensity * 0.4);
+              frameColor += goldBright * flashIntensity * 2.0;
+              frameColor += whiteHot * flashIntensity * 1.5;
 
-            // Apply sequential flash - makes it much brighter and whiter
-            color += whiteGold * flashIntensity * 0.8;
-            color *= (1.0 + flashIntensity * 0.5);
+              // Bloom multiplier
+              frameColor *= (1.0 + flashIntensity * 1.5);
+              frameColor *= brightness;
 
-            // Apply brightness
-            color *= brightness;
+              color = frameColor;
+            } else {
+              // Photo area
+              vec2 photoUv = (uv - borderSize) / (1.0 - 2.0 * borderSize);
+              photoUv = clamp(photoUv, 0.0, 1.0);
+
+              vec3 photoColor = texture2D(photoTexture, photoUv).rgb;
+
+              // Wash out with golden light when flashing
+              vec3 washColor = vec3(1.0, 0.95, 0.7);
+              photoColor = mix(photoColor, washColor, flashIntensity * 0.5);
+              photoColor += vec3(1.0, 0.9, 0.5) * flashIntensity * 0.8;
+
+              color = photoColor;
+            }
+
+            // Add strong radial glow overlay
+            vec3 glowColor = vec3(1.0, 0.92, 0.6);
+            color += glowColor * radialGlow;
+
+            // Extra bloom at edges
+            float edgeGlow = exp(-distFromEdge * 8.0) * flashIntensity * 1.5;
+            color += vec3(1.0, 0.95, 0.7) * edgeGlow;
 
             gl_FragColor = vec4(color, 1.0);
           }
@@ -759,21 +672,104 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
         side: THREE.DoubleSide,
       });
 
-      const letterMesh = new THREE.Mesh(ornamentGeometry, letterMaterial);
-      letterMesh.position.set(x, y, z);
-      letterMesh.rotation.y = placementAngle;
+      const frameMesh = new THREE.Mesh(frameGeometry, frameMaterial);
+      frameMesh.position.set(x, y, z);
 
-      // Store metadata for click detection and animation
-      const letterData = letterMesh as THREE.Mesh & {
+      // Random rotation to face different directions
+      const faceAngle = Math.atan2(z, x);
+      frameMesh.rotation.y = faceAngle + Math.PI; // Face outward
+      // Add random tilt
+      const tiltX = (Math.random() - 0.5) * 0.6;
+      const tiltZ = (Math.random() - 0.5) * 0.4;
+      frameMesh.rotation.x = tiltX;
+      frameMesh.rotation.z = tiltZ;
+
+      // Store metadata
+      const frameData = frameMesh as THREE.Mesh & {
         isLetter: boolean;
         letterIndex: number;
-        spinPhase: number;
+        imageUrl: string;
       };
-      letterData.isLetter = true;
-      letterData.letterIndex = i;
-      letterData.spinPhase = Math.random() * Math.PI * 2;
+      frameData.isLetter = true;
+      frameData.letterIndex = i;
+      frameData.imageUrl = `/ornaments/${(i % 5) + 1}.jpg`;
 
-      s.treeGroup.add(letterMesh);
+      s.treeGroup.add(frameMesh);
+
+      // Add glow halo behind the frame
+      const glowSize = frameSize * 3.5;
+      const glowGeometry = new THREE.PlaneGeometry(glowSize, glowSize);
+      const glowMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          time: { value: 0 },
+          ornamentIndex: { value: i },
+          totalOrnaments: { value: config.letterCount },
+          flowSpeed: { value: 2.0 },
+          brightness: { value: config.letterBrightness },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float time;
+          uniform float ornamentIndex;
+          uniform float totalOrnaments;
+          uniform float flowSpeed;
+          uniform float brightness;
+          varying vec2 vUv;
+
+          void main() {
+            vec2 center = vUv - 0.5;
+            float dist = length(center);
+
+            // Discard pixels outside circle to remove square edges
+            if (dist > 0.5) discard;
+
+            // Sequential flash
+            float cyclePosition = mod(time * flowSpeed, totalOrnaments);
+            float distFromFlash = abs(ornamentIndex - cyclePosition);
+            distFromFlash = min(distFromFlash, totalOrnaments - distFromFlash);
+            float flashIntensity = exp(-distFromFlash * distFromFlash * 0.15) * 4.0;
+
+            // Radial glow - smooth circular falloff
+            float glow = exp(-dist * 5.0) * flashIntensity;
+
+            // Smooth edge fade
+            float edgeFade = 1.0 - smoothstep(0.3, 0.5, dist);
+            glow *= edgeFade;
+
+            // Golden glow color
+            vec3 glowColor = vec3(1.0, 0.9, 0.4) * glow * brightness;
+
+            // Fade alpha based on distance
+            float alpha = glow * 0.9;
+
+            gl_FragColor = vec4(glowColor, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+      glowMesh.position.set(x, y, z);
+      glowMesh.rotation.y = faceAngle + Math.PI;
+      glowMesh.rotation.x = tiltX;
+      glowMesh.rotation.z = tiltZ;
+      glowMesh.position.add(new THREE.Vector3(0, 0, -0.01).applyEuler(glowMesh.rotation));
+
+      // Mark as glow (not clickable)
+      const glowData = glowMesh as THREE.Mesh & { isFrameGlow: boolean; letterIndex: number };
+      glowData.isFrameGlow = true;
+      glowData.letterIndex = i;
+
+      s.treeGroup.add(glowMesh);
     }
 
     // Create snow
@@ -869,8 +865,14 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
           mat.uniforms.brightness.value = config.letterBrightness;
           mat.uniforms.flowSpeed.value = config.letterFlowSpeed;
           mat.uniforms.totalOrnaments.value = config.letterCount;
-          // Spin on own Y axis
-          mesh.rotation.y += config.letterSpinSpeed * 0.02;
+        }
+        const glowMesh = mesh as THREE.Mesh & { isFrameGlow?: boolean };
+        if (glowMesh.isFrameGlow) {
+          const mat = mesh.material as THREE.ShaderMaterial;
+          mat.uniforms.time.value = time;
+          mat.uniforms.brightness.value = config.letterBrightness;
+          mat.uniforms.flowSpeed.value = config.letterFlowSpeed;
+          mat.uniforms.totalOrnaments.value = config.letterCount;
         }
       });
 
