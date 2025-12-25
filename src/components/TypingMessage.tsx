@@ -11,35 +11,27 @@ Mong rằng trong mùa Giáng sinh ấm áp này, hai mẹ con luôn mạnh kh�
 Chúc hai mẹ con một mùa Giáng sinh an lành, hạnh phúc và tràn đầy yêu thương.`;
 
 export default function TypingMessage() {
-  const [displayedText, setDisplayedText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
     if (currentIndex < message.length) {
       const timeout = setTimeout(() => {
-        setDisplayedText((prev) => prev + message[currentIndex]);
         setCurrentIndex((prev) => prev + 1);
-      }, 80); // Speed of typing
+      }, 80);
 
       return () => clearTimeout(timeout);
     } else {
-      setIsComplete(true);
-    }
-  }, [currentIndex]);
-
-  // Restart animation after completion
-  useEffect(() => {
-    if (isComplete) {
+      // Wait 10 seconds before restarting
       const timeout = setTimeout(() => {
-        setDisplayedText("");
         setCurrentIndex(0);
-        setIsComplete(false);
-      }, 10000); // Wait 10 seconds before restarting
+      }, 10000);
 
       return () => clearTimeout(timeout);
     }
-  }, [isComplete]);
+  }, [currentIndex]);
+
+  const displayedText = message.slice(0, currentIndex);
+  const isComplete = currentIndex >= message.length;
 
   return (
     <div className="fixed left-6 md:left-10 top-1/2 -translate-y-1/2 z-30 max-w-[350px] md:max-w-[450px] pointer-events-none">
@@ -48,8 +40,9 @@ export default function TypingMessage() {
         style={{
           fontFamily: "var(--font-handwriting), 'Dancing Script', cursive",
           color: "#ffd700",
-          textShadow: "0 0 15px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.4), 0 0 45px rgba(255, 215, 0, 0.2)",
+          textShadow: "0 0 10px rgba(255, 215, 0, 0.5)",
           whiteSpace: "pre-wrap",
+          willChange: "contents",
         }}
       >
         {displayedText}
