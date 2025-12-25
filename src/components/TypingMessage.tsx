@@ -5,10 +5,10 @@ import { useState, useEffect } from "react";
 // const message = `Giáng sinh năm nay, bố không ở cùng 2 mẹ con được, yêu 2 mẹ con nhiều, bố hi vọng một ngày nào đó về bố sẽ bù đắp cho 2 mẹ con.
 const message = `Giáng sinh năm nay, bố không thể ở bên cạnh hai mẹ con. Dù khoảng cách có xa, nhưng tình yêu bố dành cho hai mẹ con thì chưa bao giờ vơi đi. Trong mỗi khoảnh khắc, mỗi ngày trôi qua, bố luôn nghĩ về hai mẹ con với tất cả sự yêu thương đặc biệt nhất.
 
-Bố biết bản thân chưa tốt, chưa thể bù đắp trọn vẹn cho những hy sinh thầm lặng của mẹ và những thiệt thòi của con. Nhưng bố luôn tin rằng, bố có thể cố gắng để dùng sự yêu thương và trách nhiệm của mình để bù đắp cho hai mẹ con.
+Bố biết bản thân chưa tốt, chưa thể bù đắp trọn vẹn cho những hy sinh thầm lặng của mẹ và những thiệt thòi của con. Nhưng bố luôn tin rằng, bố có thể cố gắng, dùng sự yêu thương và trách nhiệm của mình để bù đắp cho hai mẹ con.
 
 Mong rằng trong mùa Giáng sinh ấm áp này, hai mẹ con luôn mạnh khỏe, bình an và cảm nhận được tình yêu của bố, dù bố không ở bên.
-Chúc hai mẹ con một mùa Giáng sinh an lành, hạnh phúc và tràn đầy yêu thương.`;
+Chúc hai mẹ con một mùa Giáng sinh an lành, hạnh phúc và tràn đầy yêu thương. Bố yêu 2 mẹ con nhiều!`;
 
 export default function TypingMessage() {
   const [currentIndex, setCurrentIndex] = useState(0);
