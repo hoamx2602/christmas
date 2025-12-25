@@ -1,3 +1,8 @@
+export interface MediaFile {
+  full: string;
+  thumb: string;
+}
+
 export interface ChristmasConfig {
   // Tree particles
   particleCount: number;
@@ -27,7 +32,7 @@ export interface ChristmasConfig {
 
   // Ornaments
   ornamentCount: number;
-  ornamentImages: string[];
+  ornamentImages: MediaFile[]; // { full: string, thumb: string }
 
   // Animation
   twinkleSpeed: number;
@@ -62,13 +67,7 @@ export const defaultConfig: ChristmasConfig = {
   backgroundColor: "#2a0a0a",
   musicTrack: "/music/jingle-bells.mp3",
   ornamentCount: 25,
-  ornamentImages: [
-    "/ornaments/1.jpg",
-    "/ornaments/2.jpg",
-    "/ornaments/3.jpg",
-    "/ornaments/4.jpg",
-    "/ornaments/5.jpg",
-  ],
+  ornamentImages: [],
   twinkleSpeed: 4,
   rotationSpeed: 0.15,
   snowEnabled: true,

@@ -42,7 +42,7 @@ export default function TypingMessage() {
       <div
         className="text-xl md:text-2xl leading-relaxed font-medium"
         style={{
-          fontFamily: "var(--font-caveat), 'Caveat', cursive",
+          fontFamily: "var(--font-handwriting), 'Dancing Script', cursive",
           color: "#ffd700",
           textShadow: "0 0 15px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.4), 0 0 45px rgba(255, 215, 0, 0.2)",
           whiteSpace: "pre-wrap",

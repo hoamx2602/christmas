@@ -7,9 +7,20 @@ import { ChristmasConfig } from "@/types/config";
 interface ChristmasTreeProps {
   config: ChristmasConfig;
   onOrnamentClick: (imageUrl: string, index: number) => void;
+  externalZoom?: number;
+  externalRotation?: { x: number; y: number };
+  externalTap?: { x: number; y: number } | null;
+  disableInteraction?: boolean;
 }
 
-export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTreeProps) {
+export default function ChristmasTree({
+  config,
+  onOrnamentClick,
+  externalZoom,
+  externalRotation,
+  externalTap,
+  disableInteraction = false,
+}: ChristmasTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -213,7 +224,32 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
       if (sceneRef.current) sceneRef.current.isDragging = false;
     });
 
+    // Start basic render loop immediately for smooth loading
+    let animationId: number;
+    const basicRender = () => {
+      animationId = requestAnimationFrame(basicRender);
+      if (sceneRef.current) {
+        const s = sceneRef.current;
+        // Smooth zoom
+        s.currentZoom += (s.targetZoom - s.currentZoom) * 0.08;
+        s.camera.position.z = s.currentZoom;
+        s.cameraTarget.lerp(s.targetCameraTarget, 0.05);
+        const cameraOffset = new THREE.Vector3(0, 0, s.currentZoom);
+        s.camera.position.copy(s.cameraTarget).add(cameraOffset);
+        s.camera.lookAt(s.cameraTarget);
+        // Auto rotate
+        if (s.autoRotate && !s.isDragging) {
+          s.rotationY += 0.15 * 0.016;
+        }
+        s.treeGroup.rotation.y = s.rotationY;
+        s.treeGroup.rotation.x = s.rotationX;
+        s.renderer.render(s.scene, s.camera);
+      }
+    };
+    basicRender();
+
     return () => {
+      cancelAnimationFrame(animationId);
       window.removeEventListener("resize", handleResize);
       container.removeEventListener("wheel", handleWheel);
       container.removeEventListener("mousedown", handleMouseDown);
@@ -469,7 +505,7 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
     const starMesh = new THREE.Mesh(starGeometry, starMaterial);
     starMesh.position.y = 2.6 * scale;
     starMesh.rotation.x = 0.1;
-    (starMesh as THREE.Mesh & { isStar: boolean }).isStar = true;
+    (starMesh as unknown as THREE.Mesh & { isStar: boolean }).isStar = true;
     s.treeGroup.add(starMesh);
 
     // Store reference for animation
@@ -518,23 +554,69 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
     const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
     glowMesh.position.y = 2.6 * scale;
     glowMesh.position.z = -0.05;
-    (glowMesh as THREE.Mesh & { isStarGlow: boolean }).isStarGlow = true;
+    (glowMesh as unknown as THREE.Mesh & { isStarGlow: boolean }).isStarGlow = true;
     s.treeGroup.add(glowMesh);
 
-    // Load textures for photo frames
+    // Load textures for photo frames (supports images and videos) - async to avoid lag
     const textureLoader = new THREE.TextureLoader();
     const photoTextures: THREE.Texture[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const texture = textureLoader.load(`/ornaments/${i}.jpg`);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      photoTextures.push(texture);
-    }
+    const videoElements: HTMLVideoElement[] = [];
 
-    // Create photo frame ornaments
-    const placedPositions: THREE.Vector3[] = [];
-    const minDistance = config.letterSize * scale * 2.8;
+    // Use thumbnails for ornaments, full URLs stored for modal
+    const mediaFiles = config.ornamentImages.length > 0
+      ? config.ornamentImages
+      : [{ full: "/ornaments/1.jpg", thumb: "/ornaments/1.jpg" }];
 
-    for (let i = 0; i < config.letterCount; i++) {
+    // Load textures asynchronously - use THUMB urls for ornaments (much smaller)
+    const loadTextures = async () => {
+      for (const media of mediaFiles) {
+        const thumbUrl = media.thumb;
+        const isVideo = /\.(mp4|webm|mov)$/i.test(thumbUrl);
+
+        if (isVideo) {
+          const video = document.createElement('video');
+          video.src = thumbUrl;
+          video.loop = true;
+          video.muted = true;
+          video.playsInline = true;
+          video.crossOrigin = "anonymous";
+          video.preload = "metadata";
+          videoElements.push(video);
+
+          const videoTexture = new THREE.VideoTexture(video);
+          videoTexture.colorSpace = THREE.SRGBColorSpace;
+          photoTextures.push(videoTexture);
+
+          // Defer video play to avoid blocking
+          requestAnimationFrame(() => video.play().catch(() => {}));
+        } else {
+          // Load thumbnail texture with promise
+          await new Promise<void>((resolve) => {
+            const texture = textureLoader.load(thumbUrl, () => resolve(), undefined, () => resolve());
+            texture.colorSpace = THREE.SRGBColorSpace;
+            photoTextures.push(texture);
+          });
+        }
+        // Yield to main thread between loads
+        await new Promise(r => setTimeout(r, 0));
+      }
+    };
+
+    // Create ornaments after textures are loaded (deferred to avoid lag)
+    const createOrnaments = async () => {
+      await loadTextures();
+
+      // Yield to let the tree render first
+      await new Promise(r => setTimeout(r, 50));
+
+      const placedPositions: THREE.Vector3[] = [];
+      const minDistance = config.letterSize * scale * 2.8;
+
+      for (let i = 0; i < config.letterCount; i++) {
+        // Yield between creating each ornament to avoid blocking
+        if (i > 0 && i % 3 === 0) {
+          await new Promise(r => setTimeout(r, 0));
+        }
       // Find non-overlapping position
       let x = 0, y = 0, z = 0;
       let validPosition = false;
@@ -685,14 +767,14 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
       frameMesh.rotation.z = tiltZ;
 
       // Store metadata
-      const frameData = frameMesh as THREE.Mesh & {
+      const frameData = frameMesh as unknown as THREE.Mesh & {
         isLetter: boolean;
         letterIndex: number;
         imageUrl: string;
       };
       frameData.isLetter = true;
       frameData.letterIndex = i;
-      frameData.imageUrl = `/ornaments/${(i % 5) + 1}.jpg`;
+      frameData.imageUrl = mediaFiles[i % mediaFiles.length].full;
 
       s.treeGroup.add(frameMesh);
 
@@ -765,12 +847,16 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
       glowMesh.position.add(new THREE.Vector3(0, 0, -0.01).applyEuler(glowMesh.rotation));
 
       // Mark as glow (not clickable)
-      const glowData = glowMesh as THREE.Mesh & { isFrameGlow: boolean; letterIndex: number };
+      const glowData = glowMesh as unknown as THREE.Mesh & { isFrameGlow: boolean; letterIndex: number };
       glowData.isFrameGlow = true;
       glowData.letterIndex = i;
 
       s.treeGroup.add(glowMesh);
-    }
+      }
+    };
+
+    // Start creating ornaments (non-blocking)
+    createOrnaments();
 
     // Create snow
     if (config.snowEnabled) {
@@ -931,10 +1017,61 @@ export default function ChristmasTree({ config, onOrnamentClick }: ChristmasTree
     };
   }, [config]);
 
+  // Handle external zoom from hand gesture
+  useEffect(() => {
+    if (externalZoom !== undefined && sceneRef.current) {
+      const s = sceneRef.current;
+      s.targetZoom = Math.max(1.5, Math.min(15, s.targetZoom - externalZoom * 0.1));
+      s.autoRotate = false;
+      s.lastInteractionTime = Date.now();
+    }
+  }, [externalZoom]);
+
+  // Handle external rotation from hand gesture
+  useEffect(() => {
+    if (externalRotation && sceneRef.current) {
+      const s = sceneRef.current;
+      s.rotationY += externalRotation.x * 0.01;
+      s.rotationX += externalRotation.y * 0.01;
+      s.rotationX = Math.max(-0.5, Math.min(0.5, s.rotationX));
+      s.autoRotate = false;
+      s.lastInteractionTime = Date.now();
+    }
+  }, [externalRotation]);
+
+  // Handle external tap from hand gesture
+  useEffect(() => {
+    if (externalTap && sceneRef.current && containerRef.current) {
+      const s = sceneRef.current;
+      const rect = containerRef.current.getBoundingClientRect();
+
+      // Convert tap position to normalized device coordinates
+      const mouseX = externalTap.x * 2 - 1;
+      const mouseY = -(externalTap.y * 2 - 1);
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), s.camera);
+
+      const letterMeshes = s.treeGroup.children.filter((child) => {
+        const mesh = child as THREE.Mesh & { isLetter?: boolean };
+        return mesh.isLetter;
+      });
+
+      const intersects = raycaster.intersectObjects(letterMeshes);
+      if (intersects.length > 0) {
+        const clickedFrame = intersects[0].object as THREE.Mesh & {
+          letterIndex: number;
+          imageUrl: string;
+        };
+        onOrnamentClick(clickedFrame.imageUrl, clickedFrame.letterIndex);
+      }
+    }
+  }, [externalTap, onOrnamentClick]);
+
   return (
     <div
       ref={containerRef}
-      className="w-full h-full cursor-grab active:cursor-grabbing"
+      className={`w-full h-full ${disableInteraction ? 'pointer-events-none' : 'cursor-grab active:cursor-grabbing'}`}
     />
   );
 }

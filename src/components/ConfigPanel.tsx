@@ -11,9 +11,13 @@ import { ChristmasConfig, defaultConfig } from "@/types/config";
 interface ConfigPanelProps {
   config: ChristmasConfig;
   onChange: (config: ChristmasConfig) => void;
+  cameraEnabled?: boolean;
+  onCameraToggle?: () => void;
+  drawMode?: boolean;
+  onDrawModeToggle?: () => void;
 }
 
-export default function ConfigPanel({ config, onChange }: ConfigPanelProps) {
+export default function ConfigPanel({ config, onChange, cameraEnabled, onCameraToggle, drawMode, onDrawModeToggle }: ConfigPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const updateConfig = (key: keyof ChristmasConfig, value: number | boolean | string[]) => {
@@ -187,27 +191,30 @@ export default function ConfigPanel({ config, onChange }: ConfigPanelProps) {
             </div>
           </div>
 
-          {/* Letter Settings */}
+          {/* Ornament Settings */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-orange-400">Letters</h3>
+            <h3 className="text-sm font-medium text-orange-400">Ornaments</h3>
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label className="text-white/80">Letter Count</Label>
-                <span className="text-white/60 text-sm">{config.letterCount}</span>
+                <Label className="text-white/80">Ornament Count</Label>
+                <span className="text-white/60 text-sm">
+                  {config.letterCount} / {config.ornamentImages.length || 0}
+                </span>
               </div>
               <Slider
                 value={[config.letterCount]}
                 min={0}
-                max={30}
+                max={config.ornamentImages.length || 1}
                 step={1}
                 onValueChange={([v]) => updateConfig("letterCount", v)}
+                disabled={config.ornamentImages.length === 0}
               />
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label className="text-white/80">Letter Size</Label>
+                <Label className="text-white/80">Ornament Size</Label>
                 <span className="text-white/60 text-sm">
                   {config.letterSize.toFixed(2)}
                 </span>
@@ -239,7 +246,7 @@ export default function ConfigPanel({ config, onChange }: ConfigPanelProps) {
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label className="text-white/80">Letter Brightness</Label>
+                <Label className="text-white/80">Ornament Brightness</Label>
                 <span className="text-white/60 text-sm">
                   {config.letterBrightness.toFixed(1)}
                 </span>
@@ -387,6 +394,51 @@ export default function ConfigPanel({ config, onChange }: ConfigPanelProps) {
             </div>
           </div>
 
+          {/* Interactive Features */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-emerald-400">Interactive</h3>
+
+            {/* Draw on Snow */}
+            {onDrawModeToggle && (
+              <>
+                <div className="flex items-center justify-between">
+                  <Label className="text-white/80">Draw on Snow</Label>
+                  <Switch
+                    checked={drawMode}
+                    onCheckedChange={onDrawModeToggle}
+                  />
+                </div>
+
+                {drawMode && (
+                  <div className="text-white/50 text-xs bg-white/5 p-2 rounded">
+                    Use mouse to draw on screen. Lines will fade like frost.
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Camera Control */}
+            {onCameraToggle && (
+              <>
+                <div className="flex items-center justify-between">
+                  <Label className="text-white/80">Hand Gestures</Label>
+                  <Switch
+                    checked={cameraEnabled}
+                    onCheckedChange={onCameraToggle}
+                  />
+                </div>
+
+                {cameraEnabled && (
+                  <div className="text-white/50 text-xs space-y-1 bg-white/5 p-2 rounded">
+                    <p>• Move hand: rotate tree</p>
+                    <p>• Pinch thumb+index: tap</p>
+                    <p>• Pinch thumb+middle: zoom</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Snow Settings */}
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-cyan-400">Snow</h3>
@@ -483,8 +535,8 @@ export default function ConfigPanel({ config, onChange }: ConfigPanelProps) {
           <div className="text-white/50 text-xs space-y-1 pt-2 border-t border-white/10">
             <p>• Scroll to zoom in/out</p>
             <p>• Drag to rotate tree</p>
-            <p>• Click particles to view photos</p>
-            <p>• Add images: /public/ornaments/1.jpg, 2.jpg...</p>
+            <p>• Click ornaments to view photos</p>
+            <p>• Add images to: /public/ornaments/</p>
           </div>
         </div>
       </Card>

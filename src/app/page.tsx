@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import ConfigPanel from "@/components/ConfigPanel";
 import TypingMessage from "@/components/TypingMessage";
+import HandControl from "@/components/HandControl";
+import SnowCanvas from "@/components/SnowCanvas";
+import MediaModal from "@/components/MediaModal";
 import { ChristmasConfig, defaultConfig } from "@/types/config";
 
 const STORAGE_KEY = "christmas-tree-config";
@@ -52,6 +54,32 @@ export default function Home() {
   useEffect(() => {
     setConfig(loadConfig());
     setIsLoaded(true);
+
+    // Register service worker for caching
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
+  // Auto-load ornament images from API
+  useEffect(() => {
+    const fetchOrnaments = async () => {
+      try {
+        const response = await fetch("/api/ornaments");
+        const data = await response.json();
+        if (data.files && data.files.length > 0) {
+          setConfig((prev) => ({
+            ...prev,
+            ornamentImages: data.files,
+            // Set letterCount to show all ornaments by default
+            letterCount: data.files.length,
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch ornaments:", error);
+      }
+    };
+    fetchOrnaments();
   }, []);
 
   // Save config whenever it changes (after initial load)
@@ -64,6 +92,28 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Hand control state
+  const [handControlEnabled, setHandControlEnabled] = useState(false);
+  // Snow drawing mode
+  const [drawMode, setDrawMode] = useState(false);
+  const [externalZoom, setExternalZoom] = useState<number | undefined>();
+  const [externalRotation, setExternalRotation] = useState<{ x: number; y: number } | undefined>();
+  const [externalTap, setExternalTap] = useState<{ x: number; y: number } | null>(null);
+
+  const handleHandZoom = useCallback((delta: number) => {
+    setExternalZoom(Date.now() + delta); // Use timestamp to trigger update
+  }, []);
+
+  const handleHandDrag = useCallback((deltaX: number, deltaY: number) => {
+    setExternalRotation({ x: deltaX, y: deltaY });
+  }, []);
+
+  const handleHandTap = useCallback((x: number, y: number) => {
+    setExternalTap({ x, y });
+    // Reset tap after a short delay
+    setTimeout(() => setExternalTap(null), 100);
+  }, []);
+
   const handleOrnamentClick = useCallback((imageUrl: string, index: number) => {
     setSelectedImage(imageUrl);
   }, []);
@@ -72,14 +122,57 @@ export default function Home() {
     setSelectedImage(null);
   }, []);
 
+  // Try to autoplay music, if blocked then play on first user interaction
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Try autoplay
+    const tryPlay = () => {
+      audio.play().then(() => {
+        setIsPlaying(true);
+        removeListeners();
+      }).catch(() => {
+        // Autoplay blocked - will play on user interaction
+      });
+    };
+
+    // Play on any user interaction
+    const playOnInteraction = () => {
+      if (audio.paused) {
+        audio.play().then(() => {
+          setIsPlaying(true);
+          removeListeners();
+        }).catch(() => {});
+      }
+    };
+
+    const removeListeners = () => {
+      document.removeEventListener('click', playOnInteraction);
+      document.removeEventListener('touchstart', playOnInteraction);
+      document.removeEventListener('keydown', playOnInteraction);
+      document.removeEventListener('wheel', playOnInteraction);
+      document.removeEventListener('mousemove', playOnInteraction);
+    };
+
+    // Add listeners for user interaction
+    document.addEventListener('click', playOnInteraction, { once: true });
+    document.addEventListener('touchstart', playOnInteraction, { once: true });
+    document.addEventListener('keydown', playOnInteraction, { once: true });
+    document.addEventListener('wheel', playOnInteraction, { once: true });
+    document.addEventListener('mousemove', playOnInteraction, { once: true });
+
+    // Try autoplay after a short delay
+    setTimeout(tryPlay, 500);
+
+    return () => removeListeners();
+  }, []);
+
   // Handle music track change
   useEffect(() => {
-    if (audioRef.current) {
-      const wasPlaying = isPlaying;
+    if (audioRef.current && isPlaying) {
       audioRef.current.src = config.musicTrack;
-      if (wasPlaying) {
-        audioRef.current.play().catch(() => {});
-      }
+      audioRef.current.play().catch(() => {});
     }
   }, [config.musicTrack, isPlaying]);
 
@@ -101,7 +194,17 @@ export default function Home() {
       style={{ backgroundColor: config.backgroundColor }}
     >
       {/* Three.js Canvas */}
-      <ChristmasTree config={config} onOrnamentClick={handleOrnamentClick} />
+      <ChristmasTree
+        config={config}
+        onOrnamentClick={handleOrnamentClick}
+        externalZoom={externalZoom}
+        externalRotation={externalRotation}
+        externalTap={externalTap}
+        disableInteraction={drawMode}
+      />
+
+      {/* Snow Drawing Canvas */}
+      <SnowCanvas enabled={drawMode} />
 
       {/* Typing Message */}
       <TypingMessage />
@@ -121,66 +224,28 @@ export default function Home() {
       </button>
 
       {/* Config Panel */}
-      <ConfigPanel config={config} onChange={setConfig} />
+      <ConfigPanel
+        config={config}
+        onChange={setConfig}
+        cameraEnabled={handControlEnabled}
+        onCameraToggle={() => setHandControlEnabled(!handControlEnabled)}
+        drawMode={drawMode}
+        onDrawModeToggle={() => setDrawMode(!drawMode)}
+      />
 
-      {/* Image Modal */}
-      {selectedImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={closeModal}
-        >
-          <div
-            className="relative max-w-[90vw] max-h-[90vh] animate-in zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Golden Frame */}
-            <div className="p-3 md:p-4 bg-gradient-to-br from-yellow-400 via-yellow-600 to-yellow-400 rounded-lg shadow-[0_0_40px_rgba(255,215,0,0.5)]">
-              <div className="relative w-[300px] h-[400px] md:w-[400px] md:h-[500px] bg-gray-900 rounded overflow-hidden">
-                <Image
-                  src={selectedImage}
-                  alt="Ornament photo"
-                  fill
-                  className="object-cover"
-                  onError={(e) => {
-                    // Fallback for missing images
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = "none";
-                  }}
-                />
-                {/* Placeholder if image fails */}
-                <div className="absolute inset-0 flex items-center justify-center text-white/60">
-                  <div className="text-center p-4">
-                    <p className="text-yellow-400 text-lg mb-2">Photo</p>
-                    <p className="text-sm">Add your image at:</p>
-                    <p className="text-xs mt-1 font-mono">{selectedImage}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Close button */}
-            <button
-              onClick={closeModal}
-              className="absolute -top-3 -right-3 w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
+      {/* Hand Control */}
+      {handControlEnabled && (
+        <HandControl
+          enabled={handControlEnabled}
+          onToggle={() => setHandControlEnabled(!handControlEnabled)}
+          onZoom={handleHandZoom}
+          onDrag={handleHandDrag}
+          onTap={handleHandTap}
+        />
       )}
+
+      {/* Media Modal */}
+      <MediaModal src={selectedImage} onClose={closeModal} />
     </main>
   );
 }
